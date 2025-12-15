@@ -1,0 +1,52 @@
+--extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
+# Core dependencies for Offline RAG Knowledge Portal
+# Optimized for 8GB RAM systems
+
+# Document Processing
+pymupdf>=1.23.0  # Better text extraction than PyPDF2
+python-docx==1.1.0
+python-pptx==0.6.23
+openpyxl==3.1.2
+markdown==3.5.1
+beautifulsoup4==4.12.2
+pypandoc==1.12
+
+# NLP and Embeddings (lightweight models)
+# Using compatible versions that work together
+sentence-transformers==2.7.0  # Compatible with transformers 4.35+
+transformers==4.35.2  # Compatible version
+torch>=2.0.0,<2.2.0  # CPU version for offline use
+numpy>=1.24.0,<2.0.0  # Compatible with sentence-transformers
+huggingface_hub>=0.20.0,<0.26.0  # Version before cached_download removal
+
+# Google Gemini
+google-generativeai>=0.3.0
+
+# Vector Database
+faiss-cpu==1.7.4
+chromadb==0.4.18
+
+# Local LLM (lightweight options)
+llama-cpp-python>=0.2.80  # For running quantized models locally
+# Alternative: Use Ollama API if installed locally
+
+# Web Interface
+streamlit==1.28.1
+streamlit-authenticator==0.2.3
+
+# Database and Storage
+sqlalchemy==2.0.23
+# sqlite3 is built-in, no need to install
+
+# Utilities
+python-dotenv==1.0.0
+tqdm==4.66.1
+psutil==5.9.6  # For memory monitoring
+pydantic>=2.7.0
+pyyaml==6.0.1  # For YAML config parsing
+requests==2.31.0  # For optional Ollama API calls
+
+# File handling
+python-magic==0.4.27
+chardet==5.2.0
+

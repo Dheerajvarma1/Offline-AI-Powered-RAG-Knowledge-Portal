@@ -1,0 +1,97 @@
+# Configuration for Offline RAG Knowledge Portal
+# Optimized for 8GB RAM systems
+
+# Embedding Model Configuration
+embedding:
+  model_name: "sentence-transformers/all-MiniLM-L6-v2"  # Lightweight, 80MB
+  device: "cpu"  # Use "cuda" if GPU available
+  batch_size: 32  # Reduced for memory efficiency
+  max_length: 512
+
+# Document Processing
+document:
+  chunk_size: 1000000  # User requested NO CHUNKING
+  chunk_overlap: 0  # No overlap needed for single block
+  supported_formats:
+    - ".pdf"
+    - ".docx"
+    - ".pptx"
+    - ".txt"
+    - ".md"
+    - ".xlsx"
+  max_file_size_mb: 50  # Maximum file size to process
+
+# Vector Database
+vector_db:
+  type: "faiss"  # Options: "faiss", "chroma"
+  index_type: "L2"  # L2 distance metric
+  dimension: 384  # Dimension of all-MiniLM-L6-v2 embeddings
+  save_path: "./data/vector_index"
+
+# LLM Configuration (for response generation)
+llm:
+  provider: "ollama"  # Changed from "llama-cpp" to "ollama" to use your installed model
+  
+  # Google Gemini Configuration (Recommended for 8GB RAM)
+  gemini_api_key: ""  # GET KEY HERE: https://aistudio.google.com/app/apikey
+  gemini_model: "gemini-1.5-flash"
+  
+  # Ollama Configuration (Local)
+  # Recommended models for 8GB RAM: "phi3" (3.8GB), "gemma:2b" (2GB), "mistral" (4.1GB)
+  model_name: "llama3.1" 
+  ollama_base_url: "http://localhost:11434"
+  
+  temperature: 0.3 # Lower temperature for more factual answers
+  max_tokens: 1000
+  use_local: true # Enable local use
+
+  # Local Llama 3 Configuration (Native llama-cpp-python)
+  llama_cpp:
+    model_path: "C:/path/to/your/llama-3.1-7b-instruct.Q4_K_M.gguf" # UPDATE THIS PATH
+    n_ctx: 4096 # Context window size
+    n_gpu_layers: 0 # Set to > 0 if you have a GPU (e.g., 33 for full offload)
+    max_tokens: 1000
+    temperature: 0.1
+
+# Memory Management
+memory:
+  max_memory_usage_mb: 6000  # Leave 2GB for system
+  monitor_interval: 5  # Check memory every 5 seconds
+  enable_gc: true  # Enable garbage collection
+
+# Incremental Learning
+incremental:
+  enabled: true
+  update_frequency: "immediate"  # Options: "immediate", "batch", "scheduled"
+  batch_size: 10  # Documents per batch update
+
+# Role-Based Access Control
+rbac:
+  enabled: true
+  default_role: "viewer"
+  roles:
+    - name: "admin"
+      permissions: ["read", "write", "delete", "manage_users", "manage_documents"]
+    - name: "researcher"
+      permissions: ["read", "search", "view_all"]
+    - name: "viewer"
+      permissions: ["read", "search"]
+
+# Application Settings
+app:
+  title: "Offline RAG Knowledge Portal"
+  data_dir: "./data"
+  documents_dir: "./data/documents"
+  database_path: "./data/knowledge_portal.db"
+  session_timeout: 3600  # 1 hour in seconds
+  max_upload_size_mb: 100
+
+# Logging
+logging:
+  level: "INFO"
+  file: "./logs/app.log"
+  max_file_size_mb: 10
+  backup_count: 5
+
+
+
