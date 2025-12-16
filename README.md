@@ -17,6 +17,7 @@ The Offline AI-Powered RAG Knowledge Portal is a secure, privacy-centric knowled
 ### 2. Information Retrieval
 *   **Semantic Search**: Utilizes the `all-MiniLM-L6-v2` embedding model to understand the contextual meaning of queries rather than relying solely on keyword matching.
 *   **Retrieval-Augmented Generation**: Combines the precision of vector search with the generative capabilities of Large Language Models (LLMs) to provide direct, context-aware answers.
+*   **Interactive Conversational Interface**: A dynamic chat system that maintains conversation history, enabling users to ask follow-up questions and refine their queries contextually.
 *   **Multi-Format Support**: Native support for processing PDF, Microsoft Word (DOCX), PowerPoint (PPTX), Plain Text (TXT), Markdown (MD), and Excel (XLSX) files.
 
 ### 3. User Interface and Experience
@@ -34,6 +35,7 @@ The system follows a modular layered architecture:
     *   **Vector Database**: FAISS (Facebook AI Similarity Search) for high-speed similarity retrieval.
     *   **Metadata Store**: SQLite for durable storage of document attributes, user credentials, and permission settings.
     *   **Embedding Generator**: Sentence Transformers for text-to-vector conversion.
+    *   **Conversation Manager**: Context engine that retains chat history to inform LLM responses.
 
 ## System Requirements
 
@@ -87,11 +89,14 @@ streamlit run app.py
 
 ### Researcher Workflow
 *   **Document Upload**: Researchers can upload documents. These are automatically tagged with their assigned department.
-*   **Knowledge Retrieval**: Use the search bar to query the knowledge base. Results will be strictly filtered to show only documents from the Researcher's department.
+*   **Conversational Knowledge Retrieval**: Use the "Knowledge Chat" interface to query the database.
+    *   **Follow-up Questions**: The system remembers the context of the conversion. You can ask follow-up questions like "Can you elaborate on the second point?" or "Summarize that".
+    *   **Session Management**: Use the "Clear Chat Conversation" button in the sidebar to reset the context and start a new topic.
 
 ### Viewer Workflow
-*   **Search-Only Access**: Viewers have a streamlined interface focused solely on getting answers.
-*   **Privacy-First**: The "Documents" listing page is disabled. When searching, the AI provides an answer, but the specific source documents are not listed, protecting the raw data while providing the necessary intelligence.
+*   **Search-Only Access**: Viewers have a streamlined chat interface focused solely on getting answers.
+*   **Contextual Q&A**: Viewers can engage in a back-and-forth dialogue with the knowledge base to drill down into specific topics.
+*   **Privacy-First**: The "Documents" listing page is disabled. Source citations are integrated into the AI response logic but raw document navigation is restricted.
 
 ## Troubleshooting
 

@@ -164,58 +164,77 @@ def main_page():
 
 
 def search_page():
-    """Search and query interface."""
-    st.title("Search Knowledge Base")
-    st.markdown("Find answers from your documents instantly.")
+    """Interactive Chat Interface."""
+    st.title("Knowledge Chat")
     
-    # Search bar
-    query = st.text_input(
-        "Search Query",
-        placeholder="Type your question here...",
-        key="search_query",
-        label_visibility="collapsed"
-    )
-    
-    st.markdown("<br>", unsafe_allow_html=True)
-    search_button = st.button("Search", use_container_width=True, type="primary")
-    top_k = 1
-    
-    if search_button and query:
-        if st.session_state.rag_engine:
-            with st.spinner("Processing..."):
-                results = st.session_state.rag_engine.query(
-                    query,
-                    top_k=top_k,
-                    user_role=st.session_state.user['role'],
-                    user_department=st.session_state.user.get('department')
-                )
+    # Initialize chat history
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+
+    # Sidebar clear button
+    with st.sidebar:
+        if st.button("Clear Chat Conversation", type="secondary"):
+            st.session_state.messages = []
+            st.rerun()
+
+    # Display chat messages from history on app rerun
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+            # If the interactions had source docs (stored in metadata), we could show them here
+            # For simplicity, we just show text history, and sources will display for the latest answer below
             
-            # Display AI response
-            st.markdown("### AI Analysis")
-            st.info(results['response'])
+    # Accept user input
+    if prompt := st.chat_input("Ask a question about your documents..."):
+        # Add user message to chat history
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        
+        # Display user message in chat message container
+        with st.chat_message("user"):
+            st.markdown(prompt)
+
+        # Display assistant response in chat message container
+        with st.chat_message("assistant"):
+            message_placeholder = st.empty()
+            full_response = ""
             
-            # Log search
-            if st.session_state.user:
-                db = Database(st.session_state.config)
-                db.log_search(
-                    st.session_state.user['id'],
-                    query,
-                    results['result_count']
-                )
-            
-            # Display search results
-            if st.session_state.user['role'] != 'viewer':
-                st.markdown("<br>", unsafe_allow_html=True)
-                st.markdown(f"### Sources ({results['result_count']})")
-                
-                for i, result in enumerate(results['results'], 1):
-                    with st.expander(f"{result.get('file_name', 'Unknown')}", expanded=True):
-                        st.markdown(f"**Path:** `{result.get('file_path', 'Unknown')}`")
-                        st.markdown(f"**Relevance:** {result.get('score', 0):.2f}")
-                        st.markdown("---")
-                        st.write(result.get('text', 'No text available'))
-        else:
-            st.error("System initializing. Please refresh.")
+            if st.session_state.rag_engine:
+                with st.spinner("Analyzing documents..."):
+                    # Pass chat history to RAG engine
+                    results = st.session_state.rag_engine.query(
+                        prompt,
+                        top_k=3, # Reduced to 3 for chat conciseness
+                        user_role=st.session_state.user['role'],
+                        user_department=st.session_state.user.get('department'),
+                        chat_history=st.session_state.messages
+                    )
+                    
+                    full_response = results['response']
+                    message_placeholder.markdown(full_response)
+                    
+                    # Display sources for the latest response (only for non-viewers)
+                    if st.session_state.user['role'] != 'viewer' and results['result_count'] > 0:
+                        with st.expander(f"Sources ({results['result_count']})"):
+                            for i, result in enumerate(results['results'], 1):
+                                st.markdown(f"**{i}. {result.get('file_name', 'Unknown')}** (Score: {result.get('score', 0):.2f})")
+                                st.caption(f"Path: {result.get('file_path', 'Unknown')}")
+                                st.text(result.get('text', 'No text available')[:200] + "...")
+                                st.markdown("---")
+
+                    # Log search
+                    if st.session_state.user:
+                        db = Database(st.session_state.config)
+                        db.log_search(
+                            st.session_state.user['id'],
+                            prompt,
+                            results['result_count']
+                        )
+            else:
+                 st.error("System initializing. Please refresh.")
+                 full_response = "System Error: RAG Engine not ready."
+
+        # Add assistant response to chat history
+        st.session_state.messages.append({"role": "assistant", "content": full_response})
 
 
 def documents_page():

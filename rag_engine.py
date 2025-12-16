@@ -44,7 +44,8 @@ class RAGEngine:
                 print("Warning: Llama model path not configured in config.yaml")
     
     def query(self, query_text: str, top_k: int = 5, 
-              user_role: str = 'viewer', user_department: str = None) -> Dict:
+              user_role: str = 'viewer', user_department: str = None,
+              chat_history: List[Dict] = None) -> Dict:
         """Process a query and return relevant results with generated response."""
         # Generate query embedding
         query_embedding = self.embedding_gen.generate_embeddings(query_text)
@@ -59,7 +60,7 @@ class RAGEngine:
             print(f"DEBUG: After filtering: {len(results)} results")
         
         # Generate response
-        response = self._generate_response(query_text, results)
+        response = self._generate_response(query_text, results, chat_history)
         
         return {
             'query': query_text,
@@ -87,89 +88,106 @@ class RAGEngine:
             doc_dept = res.get('department')
             
             # Strict Departmental Isolation:
-            # - User must have a department.
-            # - Document must have a department.
-            # - They must match.
-            # Documents with no department (e.g. uploaded by Admin with no Dept) 
-            # are NOT visible to Department users.
-            
             if user_department and doc_dept == user_department:
                 filtered_results.append(res)
                 
         return filtered_results
     
-    def _generate_response(self, query: str, results: List[Dict]) -> str:
-        """Generate a response using the retrieved context."""
-        if not results:
-            return "I couldn't find any relevant information in the knowledge base."
+    def _format_chat_history(self, chat_history: List[Dict]) -> str:
+        """Format chat history into a string context."""
+        if not chat_history:
+            return ""
         
-        # Build context from top results
+        # Take last 6 messages (3 turns) to preserve context without blowing token limit
+        recent_history = chat_history[-6:]
+        history_str = "Conversation History:\n"
+        for msg in recent_history:
+            role = "User" if msg['role'] == 'user' else "Assistant"
+            content = msg.get('content', '').replace('\n', ' ')
+            history_str += f"- {role}: {content}\n"
+        
+        return history_str + "\n"
+
+    def _generate_response(self, query: str, results: List[Dict], chat_history: List[Dict] = None) -> str:
+        """Generate a response using the retrieved context and chat history."""
+        # Note: Even if no results found, we might answer from chat history (e.g. "What did I just ask?")
+        # But RAG usually implies using the docs. 
+        # For now, if no results, we still try LLM to handle conversational chitchat or history questions.
+        
         context_parts = []
-        for i, result in enumerate(results[:3], 1):  # Use top 3 for context
-            chunk_text = result.get('text', '')
-            file_name = result.get('file_name', 'Unknown')
-            context_parts.append(f"[Source {i} from {file_name}]: {chunk_text}")
+        if results:
+            for i, result in enumerate(results[:3], 1):  # Use top 3 for context
+                chunk_text = result.get('text', '')
+                file_name = result.get('file_name', 'Unknown')
+                context_parts.append(f"[Source {i} from {file_name}]: {chunk_text}")
+        else:
+            context_parts.append("No specific documents found for this query.")
         
-        context = "\n\n".join(context_parts)
+        doc_context = "\n\n".join(context_parts)
+        history_context = self._format_chat_history(chat_history)
+        
+        full_context = f"{history_context}\nDocument Context:\n{doc_context}"
         
         # Generate response based on provider
         if self.llm_provider == 'gemini':
-            return self._generate_with_gemini(query, context)
+            return self._generate_with_gemini(query, full_context)
         elif self.llm_provider == 'ollama':
-            return self._generate_with_ollama(query, context, results)
+            return self._generate_with_ollama(query, full_context, results)
         elif self.llm_provider == 'llama-cpp':
-            return self._generate_with_llama_cpp(query, context)
+            return self._generate_with_llama_cpp(query, full_context)
         else:
-            return self._generate_template_response(query, context, results)
+            return self._generate_template_response(query, doc_context, results)
 
     def _generate_with_gemini(self, query: str, context: str) -> str:
         """Generate response using Google Gemini API."""
         api_key = self.config.get('llm.gemini_api_key')
         if not api_key:
-             return "Error: Gemini API key not found in config.yaml. Please add it to use Gemini."
+             return "Error: Gemini API key not found."
         
         try:
             genai.configure(api_key=api_key)
             model_name = self.config.get('llm.gemini_model', 'gemini-1.5-flash')
             model = genai.GenerativeModel(model_name)
             
-            prompt = f"""You are a helpful and accurate assistant. Use the provided context to answer the user's question.
+            prompt = f"""You are a helpful knowledge assistant.
             
-Context:
 {context}
 
 Question: {query}
 
 Instructions:
-1. Answer strictly based on the provided context.
-2. If the answer is not in the context, explicitly say "I cannot find the answer in the provided documents."
-3. Be concise and professional.
+1. Answer strictly based on the provided Document Context.
+2. If the answer is not in the documents, check the Conversation History.
+3. If still unknown, say "I cannot find the answer in the provided documents."
+4. Be concise and professional.
 
 Answer:"""
             
             response = model.generate_content(
                 prompt,
                 generation_config=genai.types.GenerationConfig(
-                    temperature=self.config.get('llm.temperature', 0.3),
-                    max_output_tokens=self.config.get('llm.max_tokens', 1000)
+                    temperature=0.3,
+                    max_output_tokens=1000
                 )
             )
-            
             return response.text
         except Exception as e:
-            print(f"Gemini API error: {e}")
             return f"Error communicating with Gemini API: {str(e)}"
     
     def _generate_with_ollama(self, query: str, context: str, results: List[Dict]) -> str:
         """Generate response using Ollama API."""
         try:
-            prompt = f"""Based on the following context, answer the question. 
-If the context doesn't contain enough information, say so.
+            prompt = f"""You are a helpful knowledge assistant.
 
-Context:
 {context}
 
 Question: {query}
+
+Instructions:
+1. Use the Document Context to answer the question.
+2. Consider Conversation History for context (e.g. if I ask "what about X", look at previous messages).
+3. If the Document Context is empty or irrelevant, strictly say you don't know based on the documents.
+4. Keep answers concise.
 
 Answer:"""
             
@@ -187,36 +205,28 @@ Answer:"""
                         "num_predict": self.config.get('llm.max_tokens', 500)
                     }
                 },
-                timeout=120  # Increased timeout for local models
+                timeout=120
             )
             
             if response.status_code == 200:
                 answer = response.json().get('response', '')
                 if answer:
                     return answer
-                else:
-                    print("Ollama returned empty response.")
-                    return self._generate_template_response(query, context, results)
-            else:
-                print(f"Ollama API error: Status {response.status_code} - {response.text}")
                 return self._generate_template_response(query, context, results)
+            else:
+                return f"Ollama Error: {response.status_code}"
         except Exception as e:
-            print(f"Ollama error: {e}. Falling back to template response.")
             return self._generate_template_response(query, context, results)
     
     def _generate_with_llama_cpp(self, query: str, context: str) -> str:
-        """Generate response using local Llama 3 model via llama-cpp-python."""
+        """Generate response using local Llama 3 model."""
         if not self.llama_model:
-            return "Error: Local Llama model not loaded. Please check config.yaml path."
+            return "Error: Local Llama model not loaded."
         
-        # Llama 3 Chat Prompt Format
         prompt_with_context = f"""<|begin_of_text|><|start_header_id|>system<|end_header_id|>
 
-You are a helpful and accurate assistant. Use the provided context to answer the user's question.
-If the answer is not in the context, explicitly say "I cannot find the answer in the provided documents."
-Be concise and professional.
+You are a helpful assistant. Use the provided context to answer the user's question.
 
-Context:
 {context}<|eot_id|><|start_header_id|>user<|end_header_id|>
 
 {query}<|eot_id|><|start_header_id|>assistant<|end_header_id|>
@@ -226,12 +236,11 @@ Context:
                 prompt_with_context,
                 max_tokens=self.config.get('llm.llama_cpp.max_tokens', 1000),
                 stop=["<|eot_id|>"],
-                temperature=self.config.get('llm.llama_cpp.temperature', 0.1),
+                temperature=0.1,
                 echo=False
             )
             return output['choices'][0]['text'].strip()
         except Exception as e:
-            print(f"Llama inference error: {e}")
             return f"Error generating response: {str(e)}"
     
     def _generate_template_response(self, query: str, context: str, 
