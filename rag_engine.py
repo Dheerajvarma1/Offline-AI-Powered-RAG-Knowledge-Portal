@@ -44,7 +44,7 @@ class RAGEngine:
                 print("Warning: Llama model path not configured in config.yaml")
     
     def query(self, query_text: str, top_k: int = 5, 
-              user_role: str = 'viewer') -> Dict:
+              user_role: str = 'viewer', user_department: str = None) -> Dict:
         """Process a query and return relevant results with generated response."""
         # Generate query embedding
         query_embedding = self.embedding_gen.generate_embeddings(query_text)
@@ -53,10 +53,10 @@ class RAGEngine:
         results = self.vector_db.search(query_embedding, k=top_k)
         print(f"DEBUG: Vector DB found {len(results)} results for query: '{query_text}'")
         
-        # Filter results based on user role (if RBAC enabled)
+        # Filter results based on user role and department
         if self.config.get('rbac.enabled', True):
-            results = self._filter_by_role(results, user_role)
-            print(f"DEBUG: After role filtering: {len(results)} results")
+            results = self._filter_results(results, user_role, user_department)
+            print(f"DEBUG: After filtering: {len(results)} results")
         
         # Generate response
         response = self._generate_response(query_text, results)
@@ -75,23 +75,28 @@ class RAGEngine:
             }
         }
     
-    def _filter_by_role(self, results: List[Dict], user_role: str) -> List[Dict]:
-        """Filter results based on user role and document permissions."""
-        # Simple implementation - can be extended with document-level permissions
-        role_permissions = self.config.get('rbac.roles', [])
-        user_perms = None
+    def _filter_results(self, results: List[Dict], user_role: str, user_department: str) -> List[Dict]:
+        """Filter results based on user role and department."""
+        # Admin sees everything
+        if user_role == 'admin':
+            return results
         
-        for role in role_permissions:
-            if role['name'] == user_role:
-                user_perms = role.get('permissions', [])
-                break
-        
-        if user_perms is None:
-            return []  # No permissions
-        
-        # For now, all roles can see all documents
-        # In production, add document-level permission checks
-        return results
+        # Filter by department for non-admins
+        filtered_results = []
+        for res in results:
+            doc_dept = res.get('department')
+            
+            # Strict Departmental Isolation:
+            # - User must have a department.
+            # - Document must have a department.
+            # - They must match.
+            # Documents with no department (e.g. uploaded by Admin with no Dept) 
+            # are NOT visible to Department users.
+            
+            if user_department and doc_dept == user_department:
+                filtered_results.append(res)
+                
+        return filtered_results
     
     def _generate_response(self, query: str, results: List[Dict]) -> str:
         """Generate a response using the retrieved context."""

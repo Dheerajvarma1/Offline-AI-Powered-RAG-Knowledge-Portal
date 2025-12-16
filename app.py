@@ -6,6 +6,7 @@ from typing import Optional, Dict
 import time
 
 from utils.config_loader import ConfigLoader
+from utils.styles import get_css
 from knowledge_manager import KnowledgeManager
 from rag_engine import RAGEngine
 from embedding_generator import EmbeddingGenerator
@@ -16,8 +17,8 @@ from utils.memory_monitor import MemoryMonitor
 
 # Page configuration
 st.set_page_config(
-    page_title="Offline RAG Knowledge Portal",
-    page_icon="📚",
+    page_title="Knowledge Portal",
+    page_icon=None,
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -57,16 +58,21 @@ def initialize_components(_config):
 
 def login_page():
     """Display login page."""
-    st.title("🔐 Login to Knowledge Portal")
-    st.markdown("---")
+    st.markdown(get_css(), unsafe_allow_html=True)
     
-    col1, col2, col3 = st.columns([1, 2, 1])
+    # Centered layout using columns
+    col1, col2, col3 = st.columns([1, 1, 1])
     
     with col2:
+        st.markdown("<br><br><br>", unsafe_allow_html=True)  # Spacer
+        st.title("Login")
+        st.markdown("Welcome back. Please enter your credentials.")
+        
         with st.form("login_form"):
             username = st.text_input("Username")
             password = st.text_input("Password", type="password")
-            submit = st.form_submit_button("Login", use_container_width=True)
+            st.markdown("<br>", unsafe_allow_html=True)
+            submit = st.form_submit_button("Sign In", use_container_width=True)
             
             if submit:
                 if not username or not password:
@@ -85,31 +91,42 @@ def login_page():
                         st.session_state.rag_engine = rag_engine
                         st.success("Login successful!")
                         time.sleep(0.5)
-                        st.rerun()  # Streamlit 1.28+ uses st.rerun()
+                        st.rerun()
                     else:
                         st.error("Invalid username or password")
         
-        st.info("**Default credentials:** admin / admin123 (change after first login!)")
+
 
 
 def main_page():
     """Main application page."""
+    st.markdown(get_css(), unsafe_allow_html=True)
+
     # Sidebar
     with st.sidebar:
-        st.title("📚 Knowledge Portal")
-        st.markdown("---")
+        st.title("Knowledge Portal")
         
         # User info
         if st.session_state.user:
-            st.success(f"Logged in as: **{st.session_state.user['username']}**")
-            st.caption(f"Role: {st.session_state.user['role']}")
+            st.markdown(f"**{st.session_state.user['username']}**")
+            st.caption(f"{st.session_state.user['role'].title()}")
         
         st.markdown("---")
         
         # Navigation
+        user_role = st.session_state.user.get('role')
+        
+        if user_role == 'viewer':
+            nav_options = ["Search", "Statistics"]
+        else:
+            nav_options = ["Search", "Documents", "Statistics"]
+            
+        if user_role == 'admin':
+            nav_options.append("User Management")
+            
         page = st.radio(
             "Navigation",
-            ["🔍 Search", "📄 Documents", "📊 Statistics", "👥 User Management", "⚙️ Settings"],
+            nav_options,
             label_visibility="collapsed"
         )
         
@@ -121,56 +138,54 @@ def main_page():
                 max_memory_mb=st.session_state.config.get('memory.max_memory_usage_mb', 6000)
             )
             memory_status = memory_monitor.get_memory_status()
-            st.caption(f"💾 {memory_status}")
+            st.caption(f"System Status: {memory_status}")
         
         # Logout
-        if st.button("🚪 Logout", use_container_width=True):
+        if st.button("Logout", use_container_width=True):
             st.session_state.authenticated = False
             st.session_state.user = None
             st.rerun()
     
     # Main content based on page selection
-    if page == "🔍 Search":
+    if page == "Search":
         search_page()
-    elif page == "📄 Documents":
+    elif page == "Documents":
         documents_page()
-    elif page == "📊 Statistics":
+    elif page == "Statistics":
         statistics_page()
-    elif page == "👥 User Management":
+    elif page == "User Management":
         user_management_page()
-    elif page == "⚙️ Settings":
-        settings_page()
 
 
 def search_page():
     """Search and query interface."""
-    st.title("🔍 Search Knowledge Base")
-    st.markdown("---")
+    st.title("Search Knowledge Base")
+    st.markdown("Find answers from your documents instantly.")
     
     # Search bar
     query = st.text_input(
-        "Enter your query:",
-        placeholder="What would you like to know?",
-        key="search_query"
+        "Search Query",
+        placeholder="Type your question here...",
+        key="search_query",
+        label_visibility="collapsed"
     )
     
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        top_k = st.slider("Number of results", 1, 20, 5)
-    with col2:
-        search_button = st.button("🔍 Search", use_container_width=True)
+    st.markdown("<br>", unsafe_allow_html=True)
+    search_button = st.button("Search", use_container_width=True, type="primary")
+    top_k = 1
     
     if search_button and query:
         if st.session_state.rag_engine:
-            with st.spinner("Searching knowledge base..."):
+            with st.spinner("Processing..."):
                 results = st.session_state.rag_engine.query(
                     query,
                     top_k=top_k,
-                    user_role=st.session_state.user['role']
+                    user_role=st.session_state.user['role'],
+                    user_department=st.session_state.user.get('department')
                 )
             
             # Display AI response
-            st.markdown("### 💡 AI Response")
+            st.markdown("### AI Analysis")
             st.info(results['response'])
             
             # Log search
@@ -183,134 +198,133 @@ def search_page():
                 )
             
             # Display search results
-            st.markdown("---")
-            st.markdown(f"### 📋 Found {results['result_count']} relevant results")
-            
-            for i, result in enumerate(results['results'], 1):
-                with st.expander(f"Result {i}: {result.get('file_name', 'Unknown')} (Score: {result.get('score', 0):.3f})"):
-                    st.markdown(f"**Source:** `{result.get('file_path', 'Unknown')}`")
-                    st.markdown(f"**Relevance Score:** {result.get('score', 0):.3f}")
-                    st.markdown("**Excerpt:**")
-                    st.text(result.get('text', 'No text available'))
+            if st.session_state.user['role'] != 'viewer':
+                st.markdown("<br>", unsafe_allow_html=True)
+                st.markdown(f"### Sources ({results['result_count']})")
+                
+                for i, result in enumerate(results['results'], 1):
+                    with st.expander(f"{result.get('file_name', 'Unknown')}", expanded=True):
+                        st.markdown(f"**Path:** `{result.get('file_path', 'Unknown')}`")
+                        st.markdown(f"**Relevance:** {result.get('score', 0):.2f}")
+                        st.markdown("---")
+                        st.write(result.get('text', 'No text available'))
         else:
-            st.error("RAG engine not initialized. Please restart the application.")
+            st.error("System initializing. Please refresh.")
 
 
 def documents_page():
     """Document management page."""
-    st.title("📄 Document Management")
-    st.markdown("---")
+    st.title("Documents")
+    st.markdown("Manage your knowledge base files.")
     
     user_role = st.session_state.user['role']
     
     # Check permissions
     if user_role not in ['admin', 'researcher']:
-        st.warning("You don't have permission to manage documents.")
+        st.warning("Access restricted to administrators.")
         return
     
     # Upload section
-    st.markdown("### 📤 Upload Documents")
-    uploaded_files = st.file_uploader(
-        "Select documents to upload",
-        type=['pdf', 'docx', 'pptx', 'txt', 'md', 'xlsx'],
-        accept_multiple_files=True
-    )
-    
-    if uploaded_files:
-        if st.button("Upload and Process", type="primary"):
-            if st.session_state.knowledge_manager:
-                progress_bar = st.progress(0)
-                status_text = st.empty()
-                
-                results = []
-                for i, uploaded_file in enumerate(uploaded_files):
-                    status_text.text(f"Processing {uploaded_file.name}...")
+    with st.expander("Upload New Files", expanded=True):
+        uploaded_files = st.file_uploader(
+            "Select documents",
+            type=['pdf', 'docx', 'pptx', 'txt', 'md', 'xlsx'],
+            accept_multiple_files=True,
+            label_visibility="collapsed"
+        )
+        
+        if uploaded_files:
+            if st.button("Process Files", type="primary"):
+                if st.session_state.knowledge_manager:
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
                     
-                    # Save uploaded file temporarily
-                    temp_path = Path("./temp") / uploaded_file.name
-                    temp_path.parent.mkdir(exist_ok=True)
+                    results = []
+                    for i, uploaded_file in enumerate(uploaded_files):
+                        status_text.text(f"Processing {uploaded_file.name}...")
+                        
+                        # Save uploaded file temporarily
+                        temp_path = Path("./temp") / uploaded_file.name
+                        temp_path.parent.mkdir(exist_ok=True)
+                        
+                        with open(temp_path, "wb") as f:
+                            f.write(uploaded_file.getbuffer())
+                        
+                        # Process document
+                        result = st.session_state.knowledge_manager.add_document(
+                            str(temp_path),
+                            st.session_state.user['username'],
+                            department=st.session_state.user.get('department')
+                        )
+                        results.append(result)
+                        
+                        # Clean up temp file
+                        temp_path.unlink()
+                        
+                        progress_bar.progress((i + 1) / len(uploaded_files))
                     
-                    with open(temp_path, "wb") as f:
-                        f.write(uploaded_file.getbuffer())
+                    status_text.empty()
+                    progress_bar.empty()
                     
-                    # Process document
-                    result = st.session_state.knowledge_manager.add_document(
-                        str(temp_path),
-                        st.session_state.user['username']
-                    )
-                    results.append(result)
+                    # Display results
+                    st.markdown("### Upload Status")
+                    for result in results:
+                        if result['status'] == 'success':
+                            st.success(f"Added: {result['message']}")
+                        elif result['status'] == 'exists':
+                            st.info(f"Skipped: {result['message']}")
+                        else:
+                            st.error(f"Failed: {result['message']}")
                     
-                    # Clean up temp file
-                    temp_path.unlink()
-                    
-                    progress_bar.progress((i + 1) / len(uploaded_files))
-                
-                status_text.empty()
-                progress_bar.empty()
-                
-                # Display results
-                st.markdown("### Upload Results")
-                for result in results:
-                    if result['status'] == 'success':
-                        st.success(f"✅ {result['message']} ({result.get('chunks', 0)} chunks)")
-                    elif result['status'] == 'exists':
-                        st.info(f"ℹ️ {result['message']}")
-                    else:
-                        st.error(f"❌ {result['message']}")
-                
-                st.rerun()
+                    time.sleep(2)
+                    st.rerun()
     
     st.markdown("---")
     
     # Document list
-    st.markdown("### 📚 Document Library")
+    st.markdown("### Library")
     
     if st.session_state.knowledge_manager:
         db = Database(st.session_state.config)
-        documents = db.get_all_documents(user_role)
+        documents = db.get_all_documents(
+            user_role=user_role,
+            user_department=st.session_state.user.get('department')
+        )
         
         if documents:
             # Search/filter
-            search_term = st.text_input("🔍 Filter documents", key="doc_filter")
+            search_term = st.text_input("Filter files", key="doc_filter", label_visibility="collapsed", placeholder="Filter by name...")
             filtered_docs = [
                 doc for doc in documents
                 if search_term.lower() in doc['file_name'].lower()
             ] if search_term else documents
             
-            st.markdown(f"**Total documents:** {len(filtered_docs)}")
+            st.caption(f"{len(filtered_docs)} documents found")
             
-            # Display documents in a table
+            # Display documents in a clean list
             for doc in filtered_docs:
-                col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
-                
-                with col1:
-                    st.markdown(f"**{doc['file_name']}**")
-                    st.caption(f"Uploaded: {doc['upload_date']} | Chunks: {doc.get('chunk_count', 0)}")
-                
-                with col2:
-                    file_size_mb = doc.get('file_size', 0) / (1024 * 1024)
-                    st.metric("Size", f"{file_size_mb:.2f} MB")
-                
-                with col3:
-                    st.markdown(f"**Status:** {doc.get('status', 'unknown')}")
-                
-                with col4:
-                    if user_role == 'admin':
-                        if st.button("🗑️ Delete", key=f"delete_{doc['file_hash']}"):
-                            if st.session_state.knowledge_manager.delete_document(doc['file_hash']):
-                                st.success("Document deleted!")
-                                time.sleep(1)
-                                st.rerun()
-                            else:
-                                st.error("Failed to delete document")
+                with st.expander(f"{doc['file_name']}", expanded=False):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.markdown(f"**{doc['file_name']}**")
+                        dept_display = doc.get('department') or 'Global/Admin'
+                        st.caption(f"Dept: **{dept_display}** | Uploaded: {doc['upload_date']}")
+                        st.write(f"Size: {doc.get('file_size', 0) / (1024 * 1024):.2f} MB")
+                    with col2:
+                        st.caption("Actions")
+                        if user_role == 'admin':
+                            if st.button("Delete File", key=f"delete_{doc['file_hash']}"):
+                                if st.session_state.knowledge_manager.delete_document(doc['file_hash']):
+                                    st.success("Deleted")
+                                    time.sleep(0.5)
+                                    st.rerun()
         else:
-            st.info("No documents in the knowledge base. Upload some documents to get started!")
+            st.info("Library is empty.")
 
 
 def statistics_page():
     """Display knowledge base statistics."""
-    st.title("📊 Knowledge Base Statistics")
-    st.markdown("---")
+    st.title("System Statistics")
     
     if st.session_state.knowledge_manager:
         stats = st.session_state.knowledge_manager.get_statistics()
@@ -319,114 +333,74 @@ def statistics_page():
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            st.metric("Total Documents", stats['total_documents'])
-        
+            st.metric("Documents", stats['total_documents'])
         with col2:
-            st.metric("Total Vectors", stats['total_vectors'])
-        
+            st.metric("Vectors", stats['total_vectors'])
         with col3:
-            st.metric("Total Chunks", stats['total_chunks'])
-        
+            st.metric("Chunks", stats['total_chunks'])
         with col4:
-            memory_usage = stats['memory_usage']
-            st.metric("System Memory Used", f"{memory_usage['system_used_percent']:.1f}%")
+            st.metric("Memory", f"{stats['memory_usage']['system_used_percent']:.1f}%")
         
         st.markdown("---")
         
-        # Memory details
-        st.markdown("### 💾 Memory Usage")
-        memory_usage = stats['memory_usage']
-        
+        # Detailed stats view
         col1, col2 = st.columns(2)
         with col1:
-            st.markdown(f"**System Total:** {memory_usage['system_total_gb']:.2f} GB")
-            st.markdown(f"**System Available:** {memory_usage['system_available_gb']:.2f} GB")
+            st.markdown("### Memory Details")
+            st.write(f"System Available: {stats['memory_usage']['system_available_gb']:.2f} GB")
+            st.write(f"Process Usage: {stats['memory_usage']['process_memory_mb']:.1f} MB")
         
         with col2:
-            st.markdown(f"**Process Memory:** {memory_usage['process_memory_mb']:.1f} MB")
-            st.markdown(f"**Process Memory %:** {memory_usage['process_memory_percent']:.1f}%")
-        
-        # Vector DB info
-        st.markdown("---")
-        st.markdown("### 🗄️ Vector Database")
-        st.markdown(f"**Dimension:** {stats['vector_db_dimension']}")
-        
-        # Recent documents
-        st.markdown("---")
-        st.markdown("### 📄 Recent Documents")
-        db = Database(st.session_state.config)
-        recent_docs = db.get_all_documents()[:10]
-        
-        if recent_docs:
-            for doc in recent_docs:
-                st.markdown(f"- **{doc['file_name']}** ({doc.get('chunk_count', 0)} chunks) - {doc['upload_date']}")
-        else:
-            st.info("No documents yet.")
+            st.markdown("### Index Info")
+            st.write(f"Dimensions: {stats['vector_db_dimension']}")
+            st.write(f"Type: FAISS IndexIDMap")
 
 
 def user_management_page():
     """User management (admin only)."""
-    st.title("👥 User Management")
-    st.markdown("---")
+    st.title("User Management")
     
     user_role = st.session_state.user['role']
     
     if user_role != 'admin':
-        st.warning("Only administrators can manage users.")
+        st.error("Unauthorized access.")
         return
     
-    # Create new user
-    st.markdown("### ➕ Create New User")
     with st.form("create_user_form"):
-        col1, col2, col3 = st.columns(3)
-        
+        st.markdown("### Create New User")
+        col1, col2 = st.columns(2)
         with col1:
             new_username = st.text_input("Username")
+            new_role = st.selectbox("Role", ["admin", "researcher", "viewer"])
+            
+            new_department = None
+            if new_role != 'admin':
+                new_department = st.text_input("Department")
+                
         with col2:
             new_password = st.text_input("Password", type="password")
-        with col3:
-            new_role = st.selectbox("Role", ["admin", "researcher", "viewer"])
-        
-        create_user = st.form_submit_button("Create User", use_container_width=True)
+            st.markdown("<br>", unsafe_allow_html=True)
+            create_user = st.form_submit_button("Create User")
         
         if create_user:
             if new_username and new_password:
-                db = Database(st.session_state.config)
-                if db.create_user(new_username, new_password, new_role):
-                    st.success(f"User '{new_username}' created successfully!")
-                    time.sleep(1)
-                    st.rerun()
+                if new_role != 'admin' and not new_department:
+                     st.error("Department is required for non-admin users.")
                 else:
-                    st.error("Username already exists!")
-            else:
-                st.error("Please fill in all fields")
-    
-    st.markdown("---")
-    
-    # List users
-    st.markdown("### 👤 Existing Users")
-    db = Database(st.session_state.config)
-    # Note: In production, add a method to list all users
-    st.info("User listing feature - to be extended in production")
+                    db = Database(st.session_state.config)
+                    if db.create_user(new_username, new_password, new_role, new_department):
+                        st.success(f"User '{new_username}' created")
+                    else:
+                        st.error("Username already exists")
 
 
 def settings_page():
     """Application settings."""
-    st.title("⚙️ Settings")
-    st.markdown("---")
+    st.title("Settings")
     
     if st.session_state.config:
-        st.markdown("### Configuration")
+        st.markdown("### Current Configuration")
         st.json(st.session_state.config.config)
-        
-        st.markdown("---")
-        st.markdown("### System Information")
-        st.info("""
-        **Offline RAG Knowledge Portal**
-        - Complete offline operation
-        - Optimized for 8GB RAM
-        - Privacy-focused architecture
-        """)
     else:
         st.error("Configuration not loaded")
 

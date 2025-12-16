@@ -31,7 +31,7 @@ class KnowledgeManager:
         self.documents_dir.mkdir(parents=True, exist_ok=True)
     
     def add_document(self, file_path: str, uploaded_by: str, 
-                    permissions: Dict = None) -> Dict:
+                    permissions: Dict = None, department: str = None) -> Dict:
         """Add a document to the knowledge base."""
         file_path = Path(file_path)
         
@@ -71,7 +71,8 @@ class KnowledgeManager:
                     'chunk_id': chunk['chunk_id'],
                     'text': chunk['text'],
                     'start_pos': chunk['start_pos'],
-                    'end_pos': chunk['end_pos']
+                    'end_pos': chunk['end_pos'],
+                    'department': department # Add department to vector metadata
                 })
             
             # Add to vector database
@@ -89,7 +90,8 @@ class KnowledgeManager:
                 file_type=dest_path.suffix,
                 chunk_count=processed['chunk_count'],
                 uploaded_by=uploaded_by,
-                permissions=permissions
+                permissions=permissions,
+                department=department
             )
             
             return {

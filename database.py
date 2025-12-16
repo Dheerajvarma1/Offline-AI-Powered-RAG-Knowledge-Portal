@@ -30,6 +30,7 @@ class Database:
                 username TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
                 role TEXT NOT NULL DEFAULT 'viewer',
+                department TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 last_login TIMESTAMP
             )
@@ -49,9 +50,21 @@ class Database:
                 chunk_count INTEGER,
                 status TEXT DEFAULT 'pending',
                 uploaded_by TEXT,
+                department TEXT,
                 permissions TEXT DEFAULT '{}'
             )
         ''')
+        
+        # Add department columns if they don't exist (migrations)
+        try:
+            cursor.execute('ALTER TABLE users ADD COLUMN department TEXT')
+        except sqlite3.OperationalError:
+            pass
+            
+        try:
+            cursor.execute('ALTER TABLE documents ADD COLUMN department TEXT')
+        except sqlite3.OperationalError:
+            pass
         
         # Chunks table (for tracking individual chunks)
         cursor.execute('''
@@ -84,9 +97,9 @@ class Database:
         if cursor.fetchone()[0] == 0:
             admin_hash = self._hash_password('admin123')
             cursor.execute('''
-                INSERT INTO users (username, password_hash, role)
-                VALUES (?, ?, ?)
-            ''', ('admin', admin_hash, 'admin'))
+                INSERT INTO users (username, password_hash, role, department)
+                VALUES (?, ?, ?, ?)
+            ''', ('admin', admin_hash, 'admin', 'IT')) # Default admin dept
         
         conn.commit()
         conn.close()
@@ -96,16 +109,16 @@ class Database:
         return hashlib.sha256(password.encode()).hexdigest()
     
     # User management
-    def create_user(self, username: str, password: str, role: str = 'viewer') -> bool:
+    def create_user(self, username: str, password: str, role: str = 'viewer', department: str = None) -> bool:
         """Create a new user."""
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             password_hash = self._hash_password(password)
             cursor.execute('''
-                INSERT INTO users (username, password_hash, role)
-                VALUES (?, ?, ?)
-            ''', (username, password_hash, role))
+                INSERT INTO users (username, password_hash, role, department)
+                VALUES (?, ?, ?, ?)
+            ''', (username, password_hash, role, department))
             conn.commit()
             conn.close()
             return True
@@ -119,7 +132,7 @@ class Database:
         password_hash = self._hash_password(password)
         
         cursor.execute('''
-            SELECT id, username, role FROM users
+            SELECT id, username, role, department FROM users
             WHERE username = ? AND password_hash = ?
         ''', (username, password_hash))
         
@@ -136,7 +149,8 @@ class Database:
             user = {
                 'id': result[0],
                 'username': result[1],
-                'role': result[2]
+                'role': result[2],
+                'department': result[3]
             }
             conn.close()
             return user
@@ -148,7 +162,7 @@ class Database:
         """Get user information."""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
-        cursor.execute('SELECT id, username, role FROM users WHERE username = ?', (username,))
+        cursor.execute('SELECT id, username, role, department FROM users WHERE username = ?', (username,))
         result = cursor.fetchone()
         conn.close()
         
@@ -156,14 +170,15 @@ class Database:
             return {
                 'id': result[0],
                 'username': result[1],
-                'role': result[2]
+                'role': result[2],
+                'department': result[3]
             }
         return None
     
     # Document management
     def add_document(self, file_name: str, file_path: str, file_hash: str,
                     file_size: int, file_type: str, chunk_count: int,
-                    uploaded_by: str, permissions: Dict = None) -> int:
+                    uploaded_by: str, permissions: Dict = None, department: str = None) -> int:
         """Add a document to the database."""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
@@ -173,10 +188,10 @@ class Database:
         cursor.execute('''
             INSERT INTO documents 
             (file_name, file_path, file_hash, file_size, file_type, 
-             chunk_count, uploaded_by, permissions, processed_date, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, 'processed')
+             chunk_count, uploaded_by, permissions, processed_date, status, department)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, 'processed', ?)
         ''', (file_name, file_path, file_hash, file_size, file_type,
-              chunk_count, uploaded_by, permissions_json))
+              chunk_count, uploaded_by, permissions_json, department))
         
         doc_id = cursor.lastrowid
         conn.commit()
@@ -192,46 +207,39 @@ class Database:
         conn.close()
         
         if row:
-            return {
-                'id': row[0],
-                'file_name': row[1],
-                'file_path': row[2],
-                'file_hash': row[3],
-                'file_size': row[4],
-                'file_type': row[5],
-                'upload_date': row[6],
-                'processed_date': row[7],
-                'chunk_count': row[8],
-                'status': row[9],
-                'uploaded_by': row[10],
-                'permissions': json.loads(row[11] or '{}')
-            }
+            columns = [col[0] for col in cursor.description]
+            doc = dict(zip(columns, row))
+            doc['permissions'] = json.loads(doc.get('permissions') or '{}')
+            return doc
         return None
     
-    def get_all_documents(self, user_role: str = None) -> List[Dict]:
-        """Get all documents (filtered by role if provided)."""
+    def get_all_documents(self, user_role: str = None, user_department: str = None) -> List[Dict]:
+        """Get all documents (filtered by role and department)."""
         conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row # Use Row factory for creating dicts easily using column names
         cursor = conn.cursor()
-        cursor.execute('SELECT * FROM documents ORDER BY upload_date DESC')
+        
+        query = 'SELECT * FROM documents'
+        params = []
+        
+        # Filter logic:
+        # If Admin: Show all.
+        # If User: Show only docs where doc.department == user.department OR doc.department IS NULL
+        
+        if user_role != 'admin' and user_department:
+            query += ' WHERE department = ?'
+            params.append(user_department)
+            
+        query += ' ORDER BY upload_date DESC'
+            
+        cursor.execute(query, tuple(params))
         rows = cursor.fetchall()
         conn.close()
         
         documents = []
         for row in rows:
-            doc = {
-                'id': row[0],
-                'file_name': row[1],
-                'file_path': row[2],
-                'file_hash': row[3],
-                'file_size': row[4],
-                'file_type': row[5],
-                'upload_date': row[6],
-                'processed_date': row[7],
-                'chunk_count': row[8],
-                'status': row[9],
-                'uploaded_by': row[10],
-                'permissions': json.loads(row[11] or '{}')
-            }
+            doc = dict(row)
+            doc['permissions'] = json.loads(doc.get('permissions') or '{}')
             documents.append(doc)
         
         return documents
