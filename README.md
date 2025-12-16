@@ -1,164 +1,112 @@
 # Offline AI-Powered RAG Knowledge Portal
 
-A completely offline, privacy-focused knowledge management system with Retrieval-Augmented Generation (RAG) capabilities, optimized for systems with 8GB RAM.
+## Executive Summary
 
-## Features
+The Offline AI-Powered RAG Knowledge Portal is a secure, privacy-centric knowledge management system designed for restricted environments. Utilizing Retrieval-Augmented Generation (RAG) technology, it enables organizations to ingest, index, and semantically search across proprietary document repositories without any data leaving the local infrastructure. The system is engineered for efficiency, operating effectively on hardware with limited resources (optimized for 8GB RAM).
 
-### Core Features
-- **Complete Offline Operation**: No internet connection required
-- **Local Hardware Optimization**: Efficient memory usage for 8GB RAM systems
-- **Data Privacy Assurance**: All processing happens locally
-- **Multi-format Document Support**: PDF, DOCX, PPTX, TXT, Markdown, Excel
-- **Intelligent Search**: Semantic search with RAG-powered responses
+## Key Features
 
-### Bonus Features
-- **Incremental Learning**: Add new documents without rebuilding entire index
-- **Role-Based Access Control**: User authentication and document-level permissions
-- **Memory Monitoring**: Real-time memory usage tracking
-- **Batch Processing**: Efficient document ingestion
+### 1. Security and Access Control
+*   **Offline Architecture**: The complete pipeline—from data ingestion to query processing—runs locally. No external APIs or cloud services are required, ensuring compliance with strict data security protocols.
+*   **Departmental Isolation**: The system implements strict data segregation. Users are assigned to specific departments and can restrictedly access only documents belonging to their unit. Admin users maintain oversight across all departments.
+*   **Role-Based Access Control (RBAC)**:
+    *   **Administrator**: Full system authority, including user management, document oversight across all departments, and system configuration.
+    *   **Researcher**: Department-restricted access with capabilities to search and view full document contents and metadata.
+    *   **Viewer**: Restricted interface designed for information consumption only. Viewers can query the AI but cannot browse raw document lists or see source citations, ensuring information flows only through the synthesized AI response.
+
+### 2. Information Retrieval
+*   **Semantic Search**: Utilizes the `all-MiniLM-L6-v2` embedding model to understand the contextual meaning of queries rather than relying solely on keyword matching.
+*   **Retrieval-Augmented Generation**: Combines the precision of vector search with the generative capabilities of Large Language Models (LLMs) to provide direct, context-aware answers.
+*   **Multi-Format Support**: Native support for processing PDF, Microsoft Word (DOCX), PowerPoint (PPTX), Plain Text (TXT), Markdown (MD), and Excel (XLSX) files.
+
+### 3. User Interface and Experience
+*   **Professional Dashboard**: A clean, distraction-free interface built with Streamlit.
+*   **Custom Branding**: Configured with organization-specific login backgrounds and logos for a cohesive corporate identity.
+*   **Adaptive Navigation**: The application interface dynamically adjusts based on the logged-in user's role, hiding unauthorized features to simplify the user workflow.
+
+## Technical Architecture
+
+The system follows a modular layered architecture:
+
+1.  **Presentation Layer**: Streamlit-based web interface handling user interactions and visualization.
+2.  **Application Logic**: Python-based backend managing authentication, state management, and orchestration.
+3.  **RAG Engine**:
+    *   **Vector Database**: FAISS (Facebook AI Similarity Search) for high-speed similarity retrieval.
+    *   **Metadata Store**: SQLite for durable storage of document attributes, user credentials, and permission settings.
+    *   **Embedding Generator**: Sentence Transformers for text-to-vector conversion.
 
 ## System Requirements
 
-- **RAM**: 8GB (optimized for this constraint)
-- **Storage**: ~2GB for models and dependencies
-- **OS**: Windows/Linux/macOS
-- **Python**: 3.8+
+To ensure optimal performance, the host machine should meet the following specifications:
 
-## Installation
+*   **Operating System**: Windows, Linux, or macOS
+*   **Memory (RAM)**: Minimum 8GB
+*   **Storage**: 2GB available space for models and application files
+*   **Runtime**: Python 3.8 or higher
 
-1. **Clone or download this repository**
+## Installation and Setup
 
-2. **Install dependencies**:
+### 1. Repository Setup
+Clone the project repository to your local machine or download the source code.
+
+### 2. Environment Configuration
+Install the required Python dependencies using the provided requirements file:
+
 ```bash
 pip install -r requirements.txt
 ```
 
-3. **Download lightweight embedding model** (automatically on first run):
-   - Model: `sentence-transformers/all-MiniLM-L6-v2` (~80MB)
-   - This is the most memory-efficient option
+### 3. Model Initialization
+On the first run, the system will automatically download the necessary embedding models (~80MB).
 
-4. **Optional: Set up local LLM** (for generation):
-   - Option A: Install Ollama and download a small model (e.g., `llama2:7b` or `mistral:7b`)
-   - Option B: Use quantized models with llama-cpp-python
-   - Option C: Use a simple template-based response system (included)
+### 4. LLM Configuration (Optional)
+For the generative AI component to function, an LLM backend is required. This project is configured to interface with **Ollama**.
+1.  Install Ollama from the official website.
+2.  Pull a compatible model (e.g., Llama 2):
+    ```bash
+    ollama pull llama2
+    ```
 
-## Quick Start
+### 5. Application Launch
+Initialize the database and start the web server:
 
-1. **Initialize the system**:
 ```bash
 python setup.py
-```
-
-2. **Start the web interface**:
-```bash
 streamlit run app.py
 ```
 
-3. **Access the portal**:
-   - Open browser to `http://localhost:8501`
-   - Default admin credentials:
-     - Username: `admin`
-     - Password: `admin123` (change immediately!)
+## User Manual
 
-## Usage
+### Administrator Workflow
+*   **Login**: Access the portal using the default credentials (reset these after first login).
+    *   Username: `admin`
+    *   Password: `admin123`
+*   **User Management**: Navigate to the "User Management" section to create accounts.
+    *   Important: When creating non-admin users, you must specify a "Department". This tag controls which documents the user can see.
+*   **Global Document Management**: Upload documents that should be accessible to specific departments. If no department is specified during upload by an Admin, the document is treated as "Global" but may be hidden from restricted users depending on strict isolation settings.
 
-### Adding Documents
+### Researcher Workflow
+*   **Document Upload**: Researchers can upload documents. These are automatically tagged with their assigned department.
+*   **Knowledge Retrieval**: Use the search bar to query the knowledge base. Results will be strictly filtered to show only documents from the Researcher's department.
 
-1. Go to "Document Management" in the sidebar
-2. Click "Upload Documents"
-3. Select files (PDF, DOCX, TXT, etc.)
-4. Documents are automatically processed and indexed
-
-### Searching
-
-1. Use the search bar on the main page
-2. Enter your query
-3. Get semantic search results with relevant document excerpts
-4. View full documents and get AI-generated summaries
-
-### User Management
-
-1. Admin can create users with different roles:
-   - **Admin**: Full access
-   - **Researcher**: Can search and view all documents
-   - **Viewer**: Limited document access based on permissions
-
-## Architecture
-
-```
-┌─────────────────┐
-│  Streamlit UI   │
-└────────┬────────┘
-         │
-┌────────▼─────────────────────────┐
-│      Application Layer           │
-│  - Authentication & RBAC         │
-│  - Query Processing              │
-│  - Document Management           │
-└────────┬─────────────────────────┘
-         │
-┌────────▼─────────────────────────┐
-│      RAG Engine                  │
-│  - Embedding Generation          │
-│  - Vector Search (FAISS)         │
-│  - Response Generation            │
-└────────┬─────────────────────────┘
-         │
-┌────────▼─────────────────────────┐
-│      Data Layer                  │
-│  - Vector Database (FAISS)       │
-│  - Metadata DB (SQLite)          │
-│  - Document Storage               │
-└──────────────────────────────────┘
-```
-
-## Memory Optimization
-
-The system includes several optimizations for 8GB RAM:
-
-1. **Lightweight Models**: Uses `all-MiniLM-L6-v2` (80MB) instead of larger models
-2. **Efficient Chunking**: Smart document chunking to balance context and memory
-3. **Lazy Loading**: Models loaded only when needed
-4. **Batch Processing**: Documents processed in small batches
-5. **Memory Monitoring**: Real-time tracking to prevent OOM errors
-6. **FAISS Index**: Memory-efficient vector storage
-
-## Configuration
-
-Edit `config.yaml` to customize:
-- Embedding model selection
-- Chunk size and overlap
-- Vector database settings
-- User roles and permissions
-- Memory limits
-
-## Security & Privacy
-
-- All data processed locally
-- No external API calls
-- Encrypted user credentials
-- Document-level access control
-- Audit logging
+### Viewer Workflow
+*   **Search-Only Access**: Viewers have a streamlined interface focused solely on getting answers.
+*   **Privacy-First**: The "Documents" listing page is disabled. When searching, the AI provides an answer, but the specific source documents are not listed, protecting the raw data while providing the necessary intelligence.
 
 ## Troubleshooting
 
-### Out of Memory Errors
-- Reduce batch size in `config.yaml`
-- Process fewer documents at once
-- Close other applications
+### Access Denied / Missing Documents
+If a user cannot see a document, verify the following:
+1.  **Department Matching**: The user's department must exactly match the document's tagged department.
+2.  **Role Restrictions**: Viewers are intentionally prevented from browsing the document list.
 
-### Slow Performance
-- Use smaller embedding models
-- Reduce chunk size
-- Enable GPU if available (optional)
+### Application Errors
+*   **Login Page Scrolling**: Ensure the browser is at 100% zoom. The CSS is optimized to fit a standard 1080p viewport without scrolling.
+*   **Connection Refused**: Ensure the Ollama service is running in the background if attempting to generate AI responses.
 
 ## License
 
-MIT License - Use freely for internal knowledge management
-
-## Contributing
-
-This is a standalone system. Customize as needed for your organization's requirements.
+This software is provided under the MIT License for internal and educational use.
 
 
 
