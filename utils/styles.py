@@ -2,9 +2,121 @@
 Custom CSS styles for the Knowledge Portal.
 Provides a clean, professional, and aesthetic look.
 """
+import base64
+from pathlib import Path
+
+def get_image_base64(path: str) -> str:
+    """Read and encode image to base64."""
+    try:
+        with open(path, "rb") as image_file:
+            encoded = base64.b64encode(image_file.read()).decode()
+        return f"data:image/jpg;base64,{encoded}"
+    except Exception:
+        return ""
+
+def get_login_css() -> str:
+    """Return CSS specifically for the login page with background image and logo."""
+    # Try to load the background image
+    bg_path = Path("assets/login_bg.jpg")
+    logo_path = Path("assets/logo.png")
+    bg_image_css = ""
+    logo_css = ""
+    
+    if bg_path.exists():
+        img_b64 = get_image_base64(str(bg_path))
+        if img_b64:
+            bg_image_css = f"""
+            .stApp {{
+                background-image: linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url("{img_b64}");
+                background-size: cover;
+                background-repeat: no-repeat;
+                background-attachment: fixed;
+            }}
+            """
+    
+    if logo_path.exists():
+        logo_b64 = get_image_base64(str(logo_path))
+        if logo_b64:
+            logo_css = f"""
+            .logo-container {{
+                position: fixed;
+                top: 20px;
+                left: 20px;
+                z-index: 999;
+                width: 150px;
+            }}
+            .logo-img {{
+                width: 100%;
+                height: auto;
+            }}
+            """
+            
+    return f"""
+    <style>
+        /* Import Google Fonts */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+
+        /* Global Styles */
+        html, body, [class*="css"] {{
+            font-family: 'Inter', sans-serif !important;
+        }}
+        
+        {bg_image_css}
+        
+        {logo_css}
+
+        /* Login Container Styling Override */
+        .stTextInput > div > div > input {{
+            background-color: rgba(255, 255, 255, 0.9);
+        }}
+        
+        /* White text for login on dark background */
+        h1, h2, h3, p, .stMarkdown {{
+            color: #ffffff !important;
+        }}
+        
+        /* Hide sidebar on login page */
+        [data-testid="stSidebar"] {{
+            display: none;
+        }}
+        
+        /* Adjust main container padding */
+        .block-container {{
+            padding-top: 5rem !important;
+            padding-bottom: 0rem !important;
+        }}
+
+        /* Form container transparent/glassy */
+        div[data-testid="stForm"] {{
+            background-color: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 2rem;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }}
+
+        /* Clean Background for inputs */
+        .stTextInput label {{
+            color: white !important;
+        }}
+        
+        /* Buttons */
+        div.stButton > button {{
+            background-color: #4f46e5;
+            color: white;
+            border: none;
+            width: 100%;
+        }}
+        
+        /* Remove default streamlit menu/footer */
+        #MainMenu {{visibility: hidden;}}
+        footer {{visibility: hidden;}}
+        header {{visibility: hidden;}}
+    </style>
+    """
 
 def get_css() -> str:
-    """Return the custom CSS string."""
+    """Return the custom CSS string for main pages."""
     return """
     <style>
         /* Import Google Fonts */
@@ -16,9 +128,10 @@ def get_css() -> str:
             color: #1a1a1a;
         }
 
-        /* Clean Background */
+        /* Reset background for main app */
         .stApp {
-            background-color: #f8f9fa;
+            background-image: none !important;
+            background-color: #f8f9fa !important;
         }
 
         /* Sidebar Styling */
@@ -26,6 +139,8 @@ def get_css() -> str:
             background-color: #ffffff;
             border-right: 1px solid #e0e0e0;
         }
+        
+        /* ... Rest of the original CSS ... */
 
         [data-testid="stSidebar"] div[data-testid="stMarkdownContainer"] h1 {
             font-weight: 600;

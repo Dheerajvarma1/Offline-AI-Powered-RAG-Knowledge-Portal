@@ -6,7 +6,7 @@ from typing import Optional, Dict
 import time
 
 from utils.config_loader import ConfigLoader
-from utils.styles import get_css
+from utils.styles import get_css, get_login_css
 from knowledge_manager import KnowledgeManager
 from rag_engine import RAGEngine
 from embedding_generator import EmbeddingGenerator
@@ -58,13 +58,19 @@ def initialize_components(_config):
 
 def login_page():
     """Display login page."""
-    st.markdown(get_css(), unsafe_allow_html=True)
+    st.markdown(get_login_css(), unsafe_allow_html=True)
     
+    # Inject logo if exists
+    if Path("assets/logo.png").exists():
+        from utils.styles import get_image_base64
+        logo_b64 = get_image_base64("assets/logo.png")
+        if logo_b64:
+             st.markdown(f'<div class="logo-container"><img src="{logo_b64}" class="logo-img"></div>', unsafe_allow_html=True)
+
     # Centered layout using columns
     col1, col2, col3 = st.columns([1, 1, 1])
     
     with col2:
-        st.markdown("<br><br><br>", unsafe_allow_html=True)  # Spacer
         st.title("Login")
         st.markdown("Welcome back. Please enter your credentials.")
         
